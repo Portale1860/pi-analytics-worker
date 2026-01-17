@@ -738,6 +738,11 @@ async function executeQuery(env: Env, request: Request): Promise<Response> {
  */
 async function deleteOpportunities(env: Env, request: Request): Promise<Response> {
   try {
+    // Verify env variables
+    if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
+      return errorResponse('Missing SUPABASE_URL or SUPABASE_KEY environment variables', 500);
+    }
+    
     const body = await request.json() as { ids: number[] };
     const ids = body.ids;
     
@@ -754,9 +759,9 @@ async function deleteOpportunities(env: Env, request: Request): Promise<Response
       const batch = ids.slice(i, i + batchSize);
       const idList = batch.join(',');
       
-      const url = `${env.SUPABASE_URL}/rest/v1/opportunities?id=in.(${idList})`;
+      const deleteUrl = `${env.SUPABASE_URL}/rest/v1/opportunities?id=in.(${idList})`;
       
-      const response = await fetch(url, {
+      const response = await fetch(deleteUrl, {
         method: 'DELETE',
         headers: {
           apikey: env.SUPABASE_KEY,
