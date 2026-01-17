@@ -728,6 +728,66 @@ async function executeQuery(env: Env, request: Request): Promise<Response> {
 }
 
 // ============================================================================
+// DELETE ENDPOINT
+// ============================================================================
+
+/**
+ * POST /delete/opportunities
+ * Delete opportunities by ID array
+ * Body: { ids: number[] }
+ */
+async function deleteOpportunities(env: Env, request: Request): Promise<Response> {
+  try {
+    const body = await request.json() as { ids: number[] };
+    const ids = body.ids;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return errorResponse('Invalid request: ids array required', 400);
+    }
+    
+    // Delete in batches of 100
+    const batchSize = 100;
+    let totalDeleted = 0;
+    const errors: string[] = [];
+    
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize);
+      const idList = batch.join(',');
+      
+      const url = `${env.SUPABASE_URL}/rest/v1/opportunities?id=in.(${idList})`;
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          apikey: env.SUPABASE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation',
+        },
+      });
+      
+      if (response.ok) {
+        const deleted = await response.json() as unknown[];
+        totalDeleted += deleted.length;
+      } else {
+        const error = await response.text();
+        errors.push(`Batch ${Math.floor(i/batchSize) + 1}: ${error}`);
+      }
+    }
+    
+    return jsonResponse({
+      success: true,
+      requested: ids.length,
+      deleted: totalDeleted,
+      errors: errors.length > 0 ? errors : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return errorResponse(`Delete error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+// ============================================================================
 // MAIN ROUTER
 // ============================================================================
 
@@ -792,6 +852,9 @@ export default {
 
         case path === '/query' && request.method === 'POST':
           return executeQuery(env, request);
+
+        case path === '/delete/opportunities' && request.method === 'POST':
+          return deleteOpportunities(env, request);
 
         default:
           return errorResponse(`Not found: ${path}`, 404);
